@@ -4,6 +4,8 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+
+	"github.com/pkg/errors"
 )
 
 func splitPath(path string) []string {
@@ -18,8 +20,23 @@ func splitPath(path string) []string {
 	return append(splitPath(dir), file)
 }
 
-func touch(name string) error {
-	file, err := os.OpenFile(name, os.O_RDONLY|os.O_CREATE, 0664)
+func writeAt(name string, data []byte, offset int64) (int, error) {
+	file, err := os.OpenFile(name, os.O_RDWR, 0664)
+	if err != nil {
+		return 0, errors.Errorf("could not open file %v: %v", name, err)
+	}
+	defer file.Close()
+
+	n, err := file.WriteAt(data, offset)
+	if err != nil {
+		return n, errors.Errorf("could not write to file %v: %v", name, err)
+	}
+
+	return n, nil
+}
+
+func touch(name string, mode os.FileMode) error {
+	file, err := os.OpenFile(name, os.O_RDONLY|os.O_CREATE, mode)
 	if err != nil {
 		return err
 	}
@@ -30,8 +47,8 @@ func rm(name string) error {
 	return os.Remove(name)
 }
 
-func mkdir(name string) error {
-	return os.Mkdir(name, os.ModeDir|0775)
+func mkdir(name string, mode os.FileMode) error {
+	return os.Mkdir(name, mode)
 }
 
 func realify(path string) string {

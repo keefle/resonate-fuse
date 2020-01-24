@@ -9,7 +9,7 @@ import (
 
 func TestCreateChild(t *testing.T) {
 	childName := "joe"
-	root := NewFileTree("root", nil)
+	root := NewDirectory("root", nil)
 
 	// Add child that does not prevously exist
 	assert.Nil(t, root.children[childName])
@@ -26,7 +26,7 @@ func TestCreateChild(t *testing.T) {
 
 func TestCreateDirChild(t *testing.T) {
 	childName := "joe"
-	root := NewFileTree("root", nil)
+	root := NewDirectory("root", nil)
 
 	// Add child that does not prevously exist
 	assert.Nil(t, root.children[childName])
@@ -59,7 +59,7 @@ func TestRemoveChild(t *testing.T) {
 	}
 
 	for _, tc := range tt {
-		root := NewFileTree("root", nil)
+		root := NewDirectory("root", nil)
 
 		for _, file := range tc.state {
 			assert.Nil(t, root.CreateDirChild(file))
@@ -83,7 +83,7 @@ func TestRename(t *testing.T) {
 	}
 
 	for _, tc := range tt {
-		root := NewFileTree("root", nil)
+		root := NewDirectory("root", nil)
 
 		for _, file := range tc.state {
 			assert.Nil(t, root.CreateDirChild(file))
@@ -98,10 +98,10 @@ func TestRename(t *testing.T) {
 func TestChild(t *testing.T) {
 	childrenNames := []string{"jeo", "ali", "leo"}
 
-	root := NewFileTree("root", nil)
+	root := NewDirectory("root", nil)
 
 	for _, childName := range childrenNames {
-		root.children[childName] = NewFileTree(childName, root)
+		root.children[childName] = NewDirectory(childName, root)
 	}
 
 	for _, name := range childrenNames {
@@ -110,10 +110,10 @@ func TestChild(t *testing.T) {
 }
 
 func TestChildren(t *testing.T) {
-	root := NewFileTree("root", nil)
+	root := NewDirectory("root", nil)
 
 	for _, childName := range []string{"jeo", "ali", "leo"} {
-		root.children[childName] = NewFileTree(childName, root)
+		root.children[childName] = NewDirectory(childName, root)
 	}
 
 	childrenList := make([]*FileTree, 0, len(root.children))
@@ -126,10 +126,10 @@ func TestChildren(t *testing.T) {
 }
 
 func TestPath(t *testing.T) {
-	root := NewFileTree("root", nil)
+	root := NewDirectory("root", nil)
 
 	childName := "joe"
-	child := NewFileTree(childName, root)
+	child := NewDirectory(childName, root)
 
 	assert.Equal(t, root.Path(), filepath.Join("."))
 	assert.Equal(t, child.Path(), filepath.Join(".", childName))

@@ -5,7 +5,7 @@ import (
 )
 
 func TestFuse(t *testing.T) {
-	// root := NewFile(NewFileTree("root", nil))
+	// root := NewFile(NewDirectory("root", nil))
 	// fs := NewFS("root")
 	// fs.root = root
 

@@ -5,6 +5,8 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"syscall"
+	"time"
 
 	"bazil.org/fuse"
 	"bazil.org/fuse/fs"
@@ -22,7 +24,7 @@ func (fs *FS) Root() (fs.Node, error) {
 }
 
 func NewFS(name string) *FS {
-	return &FS{Rot: NewFile(NewFileTree(name, nil))}
+	return &FS{Rot: NewFile(NewDirectory(name, nil))}
 }
 
 // File is the building node of a filesystem
@@ -40,33 +42,47 @@ func NewFile(ft *FileTree) *File {
 // Attr returns some attributes about the file
 func (f *File) Attr(ctx context.Context, a *fuse.Attr) error {
 	log.Println("Attring ", f.node.name)
-	a.Inode = f.node.ID()
-	switch f.node.Type() {
-	case fuse.DT_File:
-		a.Mode = 0664
-	case fuse.DT_Dir:
-		a.Mode = os.ModeDir | 0775
-	}
 
-	info, err := os.Stat(realify(f.node.Path()))
+	info, err := os.Lstat(realify(f.node.Path()))
 	if err != nil {
-		return errors.Wrapf(err, "could not retrieve file (%v) info", realify(f.node.Path()))
+		err = errors.Wrapf(err, "could not retrieve file (%v) info", realify(f.node.Path()))
+		log.Println(err)
+		return fuse.ENOENT
 	}
 
+	stat, ok := info.Sys().(*syscall.Stat_t)
+	if !ok {
+		err = errors.New("file system not supported")
+		log.Println(err)
+		return fuse.ENOENT
+	}
+
+	a.Inode = f.node.ID()
+	a.Nlink = uint32(stat.Nlink)
+	a.Uid = stat.Uid
+	a.Gid = stat.Gid
+	a.Rdev = uint32(stat.Rdev)
+	a.Mode = info.Mode()
 	a.Size = uint64(info.Size())
+	a.Atime = time.Unix(stat.Atim.Unix())
+	a.Mtime = time.Unix(stat.Mtim.Unix())
+	a.Ctime = time.Unix(stat.Ctim.Unix())
+	a.Blocks = uint64(stat.Blocks)
+	a.BlockSize = uint32(stat.Blksize)
+
 	return nil
 }
 
 // Lookup returns info about child
 func (f *File) Lookup(ctx context.Context, name string) (fs.Node, error) {
 	log.Println("Looking for ", name, " in ", f.node.name)
-	if child := f.node.Child(name); child != nil {
-		return NewFile(child), nil
+	child := f.node.Child(name)
+	if child == nil {
+		log.Println("lookup faild")
+		return nil, fuse.ENOENT
 	}
 
-	log.Println("Looking failed")
-
-	return nil, fuse.ENOENT
+	return NewFile(child), nil
 }
 
 // Create creats a new file on disk and filetree
@@ -74,19 +90,22 @@ func (f *File) Create(ctx context.Context, req *fuse.CreateRequest, resp *fuse.C
 	log.Println("Creating ", req.Name, " in ", f.node.name)
 	// First create the file and then add it to the tree (order is important)
 
-	if err := touch(realify(filepath.Join(f.node.Path(), req.Name))); err != nil {
-		return nil, nil, errors.Errorf("could not add file %v to disk", req.Name)
+	if err := touch(realify(filepath.Join(f.node.Path(), req.Name)), req.Mode); err != nil {
+		err = errors.Errorf("could not add file %v to disk", req.Name)
+		log.Println(err)
+		return nil, nil, fuse.EIO
 	}
 
 	if err := f.node.CreateChild(req.Name); err != nil {
-		return nil, nil, errors.Errorf("could not add file %v to filetree", req.Name)
+		err = errors.Errorf("could not add file %v to filetree", req.Name)
+		log.Println(err)
+		return nil, nil, fuse.EIO
 	}
 
 	return NewFile(f.node.Child(req.Name)), NewFile(f.node.Child(req.Name)), nil
 }
 
 // Remove removes file from disk and filetree
-
 func (f *File) Remove(ctx context.Context, req *fuse.RemoveRequest) error {
 	log.Println("Removing ", req.Name, " in ", f.node.name)
 	// First remove the file from the tree then remove it from disk (order is important)
@@ -102,7 +121,9 @@ func (f *File) Remove(ctx context.Context, req *fuse.RemoveRequest) error {
 	}
 
 	if err := f.node.RemoveChild(req.Name); err != nil {
-		return errors.Errorf("could not remove file %v from filetree", req.Name)
+		err = errors.Errorf("could not remove file %v from filetree", req.Name)
+		log.Println(err)
+		return fuse.EIO
 	}
 
 	if err := rm(realify(filepath.Join(f.node.Path(), req.Name))); err != nil {
@@ -112,28 +133,13 @@ func (f *File) Remove(ctx context.Context, req *fuse.RemoveRequest) error {
 	return nil
 }
 
-// WriteAt writes to a file
-func (f *File) WriteAt(data []byte, offset int64) (int, error) {
-	log.Println("Writing in ", f.node.name)
-	file, err := os.OpenFile(realify(f.node.Path()), os.O_RDWR, 0664)
-	if err != nil {
-		return 0, errors.Errorf("could not open file %v: %v", f.node.Path(), err)
-	}
-	defer file.Close()
-
-	n, err := file.WriteAt(data, offset)
-	if err != nil {
-		return n, errors.Errorf("could not write to file %v: %v", f.node.Path(), err)
-	}
-
-	return n, nil
-}
-
 func (f *File) Write(ctx context.Context, req *fuse.WriteRequest, resp *fuse.WriteResponse) error {
-	n, err := f.WriteAt(req.Data, req.Offset)
+	log.Println("Writing in ", f.node.name)
+	n, err := writeAt(realify(f.node.Path()), req.Data, req.Offset)
 	if err != nil {
 		resp.Size = n
-		return err
+		log.Println(err)
+		return fuse.EIO
 	}
 
 	resp.Size = n
@@ -161,7 +167,9 @@ func (f *File) Rename(ctx context.Context, req *fuse.RenameRequest, newDir fs.No
 	log.Println("Renaming source", source, "in", f.node.Path(), "to", target, " in ", newParent.Path())
 
 	if err := f.node.Rename(source, target, newParent); err != nil {
-		return errors.Wrapf(err, "could not rename file (%v) from (%v) to (%v)", source, f.node.Path(), newParent.Path())
+		err = errors.Wrapf(err, "could not rename file (%v) from (%v) to (%v)", source, f.node.Path(), newParent.Path())
+		log.Println(err)
+		return err
 	}
 
 	oldn := realify(filepath.Join(f.node.Path(), source))
@@ -170,7 +178,9 @@ func (f *File) Rename(ctx context.Context, req *fuse.RenameRequest, newDir fs.No
 	log.Println("target:", newn)
 
 	if err := os.Rename(oldn, newn); err != nil {
-		return errors.Wrapf(err, "could not rename file on disk (%v) from (%v) to %v", source, target, f.node.name)
+		err = errors.Wrapf(err, "could not rename file on disk (%v) from (%v) to %v", source, target, f.node.name)
+		log.Println(err)
+		return err
 	}
 
 	return nil
@@ -180,7 +190,7 @@ func (f *File) Rename(ctx context.Context, req *fuse.RenameRequest, newDir fs.No
 func (f *File) Mkdir(ctx context.Context, req *fuse.MkdirRequest) (fs.Node, error) {
 	log.Println("Mkdiring ", req.Name, " in ", f.node.name)
 
-	if err := mkdir(realify(filepath.Join(f.node.Path(), req.Name))); err != nil {
+	if err := mkdir(realify(filepath.Join(f.node.Path(), req.Name)), req.Mode); err != nil {
 		return nil, errors.Errorf("could not create real dir %v", req.Name)
 	}
 
@@ -191,6 +201,56 @@ func (f *File) Mkdir(ctx context.Context, req *fuse.MkdirRequest) (fs.Node, erro
 	child := f.node.Child(req.Name)
 
 	return NewFile(child), nil
+}
+
+func (f *File) Link(ctx context.Context, req *fuse.LinkRequest, old fs.Node) (fs.Node, error) {
+	oldnode := old.(*File).node
+	log.Println("old name:", oldnode.Path())
+	log.Println("file:", f.node.Path())
+	log.Println("req name:", req.NewName)
+
+	if err := f.node.CreateChild(req.NewName); err != nil {
+		return nil, fuse.ENOENT
+	}
+
+	child := f.node.Child(req.NewName)
+	if child == nil {
+		return nil, fuse.ENOENT
+	}
+
+	if err := os.Link(realify(oldnode.Path()), realify(filepath.Join(f.node.Path(), req.NewName))); err != nil {
+		return nil, fuse.ENOENT
+	}
+
+	return NewFile(child), nil
+
+}
+func (f *File) Symlink(ctx context.Context, req *fuse.SymlinkRequest) (fs.Node, error) {
+	log.Println("NewName:", req.NewName)
+	log.Println("Path:", f.node.Path())
+	log.Println("target:", req.Target)
+
+	if err := os.Symlink(req.Target, realify(filepath.Join(f.node.Path(), req.NewName))); err != nil {
+		log.Println("symlinl", err)
+		return nil, fuse.ENOENT
+	}
+
+	if err := f.node.CreateLinkChild(req.NewName, req.Target); err != nil {
+		log.Println("symlinl create link child", err)
+		return nil, fuse.ENOENT
+	}
+
+	child := f.node.Child(req.NewName)
+
+	return NewFile(child), nil
+}
+
+func (f *File) Readlink(ctx context.Context, req *fuse.ReadlinkRequest) (string, error) {
+	if f.node.Type() != fuse.DT_Link {
+		return "", fuse.ENOENT
+	}
+
+	return f.node.Link(), nil
 }
 
 func (f *File) Open(ctx context.Context, req *fuse.OpenRequest, resp *fuse.OpenResponse) (fs.Handle, error) {
@@ -219,6 +279,31 @@ func (f *File) Release(ctx context.Context, req *fuse.ReleaseRequest) error {
 // Setattr to be implemented
 func (f *File) Setattr(ctx context.Context, req *fuse.SetattrRequest, resp *fuse.SetattrResponse) error {
 	log.Printf("in Setattr: %v", f.node.name)
+	if !req.Valid.Mode() {
+		return nil
+	}
+
+	if err := os.Chmod(realify(f.node.Path()), req.Mode); err != nil {
+		err = errors.Wrapf(err, "could not setattr chmod file")
+		log.Println(err)
+		return fuse.EIO
+
+	}
+
+	if err := os.Chtimes(realify(f.node.Path()), req.Atime, req.Mtime); err != nil {
+		err = errors.Wrapf(err, "could not setattr chtimes file")
+		log.Println(err)
+		return fuse.EIO
+	}
+
+	// NOTE: Changing owner not supported yet
+	// TODO: Invistigate previlage escliation
+	// if err := os.Chown(realify(f.node.Path()), int(req.Uid), int(req.Gid)); err != nil {
+	//  err = return errors.Wrapf(err, "could not setattr chown file to new id (%v) gid (%v)", req.Uid, req.Gid)
+	//  log.Println(err)
+	// 	return err
+	// }
+
 	return nil
 }
 
@@ -230,9 +315,12 @@ var _ fs.HandleWriter = (*File)(nil)
 var _ fs.Node = (*File)(nil)
 var _ fs.NodeCreater = (*File)(nil)
 var _ fs.NodeFsyncer = (*File)(nil)
+var _ fs.NodeLinker = (*File)(nil)
 var _ fs.NodeMkdirer = (*File)(nil)
 var _ fs.NodeOpener = (*File)(nil)
+var _ fs.NodeReadlinker = (*File)(nil)
 var _ fs.NodeRemover = (*File)(nil)
 var _ fs.NodeRenamer = (*File)(nil)
 var _ fs.NodeSetattrer = (*File)(nil)
 var _ fs.NodeStringLookuper = (*File)(nil)
+var _ fs.NodeSymlinker = (*File)(nil)
