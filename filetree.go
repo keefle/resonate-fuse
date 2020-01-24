@@ -1,7 +1,6 @@
 package resonatefuse
 
 import (
-	"log"
 	"path/filepath"
 
 	"bazil.org/fuse"
@@ -191,8 +190,6 @@ func (ft *FileTree) Child(name string) *FileTree {
 func (ft *FileTree) Dirents() []fuse.Dirent {
 	childrenList := make([]fuse.Dirent, 0, len(ft.children))
 
-	log.Println("traversing children")
-	log.Println(ft.children)
 	for _, child := range ft.children {
 		childrenList = append(childrenList, fuse.Dirent{
 			Inode: child.ID(),

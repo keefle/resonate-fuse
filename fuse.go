@@ -158,6 +158,16 @@ func (f *File) ReadAll(ctx context.Context) ([]byte, error) {
 	log.Println("ReadAlling ", f.node.name)
 	return readall(realify(f.node.Path()))
 }
+func (f *File) Read(ctx context.Context, req *fuse.ReadRequest, resp *fuse.ReadResponse) error {
+	log.Println("Reading in ", f.node.name)
+	_, err := readAt(realify(f.node.Path()), resp.Data, req.Offset)
+	if err != nil {
+		log.Println(err)
+		return fuse.EIO
+	}
+
+	return nil
+}
 
 // Rename moves a file from source to target
 func (f *File) Rename(ctx context.Context, req *fuse.RenameRequest, newDir fs.Node) error {
@@ -309,6 +319,8 @@ func (f *File) Setattr(ctx context.Context, req *fuse.SetattrRequest, resp *fuse
 
 var _ fs.HandleFlusher = (*File)(nil)
 var _ fs.HandleReadDirAller = (*File)(nil)
+var _ fs.HandleReader = (*File)(nil)
+var _ fs.HandleReadAller = (*File)(nil)
 var _ fs.HandleReleaser = (*File)(nil)
 var _ fs.HandleWriter = (*File)(nil)
 

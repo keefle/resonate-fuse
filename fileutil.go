@@ -35,6 +35,21 @@ func writeAt(name string, data []byte, offset int64) (int, error) {
 	return n, nil
 }
 
+func readAt(name string, data []byte, offset int64) (int, error) {
+	file, err := os.OpenFile(name, os.O_RDONLY, 0664)
+	if err != nil {
+		return 0, errors.Errorf("could not open file %v: %v", name, err)
+	}
+	defer file.Close()
+
+	n, err := file.ReadAt(data, offset)
+	if err != nil {
+		return n, errors.Errorf("could not write to file %v: %v", name, err)
+	}
+
+	return n, nil
+}
+
 func touch(name string, mode os.FileMode) error {
 	file, err := os.OpenFile(name, os.O_RDONLY|os.O_CREATE, mode)
 	if err != nil {
