@@ -41,7 +41,7 @@ func NewFile(ft *FileTree) *File {
 
 // Attr returns some attributes about the file
 func (f *File) Attr(ctx context.Context, a *fuse.Attr) error {
-	log.Println("Attring ", f.node.name)
+	log.Println("Attring", f.node.name)
 
 	info, err := os.Lstat(realify(f.node.Path()))
 	if err != nil {
@@ -75,7 +75,7 @@ func (f *File) Attr(ctx context.Context, a *fuse.Attr) error {
 
 // Lookup returns info about child
 func (f *File) Lookup(ctx context.Context, name string) (fs.Node, error) {
-	log.Println("Looking for ", name, " in ", f.node.name)
+	log.Println("Looking for", name, "in", f.node.name)
 	child := f.node.Child(name)
 	if child == nil {
 		log.Println("lookup faild")
@@ -87,7 +87,7 @@ func (f *File) Lookup(ctx context.Context, name string) (fs.Node, error) {
 
 // Create creats a new file on disk and filetree
 func (f *File) Create(ctx context.Context, req *fuse.CreateRequest, resp *fuse.CreateResponse) (fs.Node, fs.Handle, error) {
-	log.Println("Creating ", req.Name, " in ", f.node.name)
+	log.Println("Creating", req.Name, "in", f.node.name)
 	// First create the file and then add it to the tree (order is important)
 
 	if err := touch(realify(filepath.Join(f.node.Path(), req.Name)), req.Mode); err != nil {
@@ -107,7 +107,7 @@ func (f *File) Create(ctx context.Context, req *fuse.CreateRequest, resp *fuse.C
 
 // Remove removes file from disk and filetree
 func (f *File) Remove(ctx context.Context, req *fuse.RemoveRequest) error {
-	log.Println("Removing ", req.Name, " in ", f.node.name)
+	log.Println("Removing", req.Name, "in", f.node.name)
 	// First remove the file from the tree then remove it from disk (order is important)
 
 	child := f.node.Child(req.Name)
@@ -134,7 +134,7 @@ func (f *File) Remove(ctx context.Context, req *fuse.RemoveRequest) error {
 }
 
 func (f *File) Write(ctx context.Context, req *fuse.WriteRequest, resp *fuse.WriteResponse) error {
-	log.Println("Writing in ", f.node.name)
+	log.Println("Writing", f.node.name)
 	n, err := writeAt(realify(f.node.Path()), req.Data, req.Offset)
 	if err != nil {
 		resp.Size = n
@@ -149,17 +149,17 @@ func (f *File) Write(ctx context.Context, req *fuse.WriteRequest, resp *fuse.Wri
 
 // ReadDirAll returns all children
 func (f *File) ReadDirAll(ctx context.Context) ([]fuse.Dirent, error) {
-	log.Println("ReadDirAlling in ", f.node.name)
+	log.Println("ReadDirAlling", f.node.name)
 	return f.node.Dirents(), nil
 }
 
 // ReadAll returns all bytes in file
 func (f *File) ReadAll(ctx context.Context) ([]byte, error) {
-	log.Println("ReadAlling ", f.node.name)
+	log.Println("ReadAlling", f.node.name)
 	return readall(realify(f.node.Path()))
 }
 func (f *File) Read(ctx context.Context, req *fuse.ReadRequest, resp *fuse.ReadResponse) error {
-	log.Println("Reading in ", f.node.name)
+	log.Println("Reading", f.node.name)
 	_, err := readAt(realify(f.node.Path()), resp.Data, req.Offset)
 	if err != nil {
 		log.Println(err)
@@ -198,7 +198,7 @@ func (f *File) Rename(ctx context.Context, req *fuse.RenameRequest, newDir fs.No
 
 // Mkdir creats a directory
 func (f *File) Mkdir(ctx context.Context, req *fuse.MkdirRequest) (fs.Node, error) {
-	log.Println("Mkdiring ", req.Name, " in ", f.node.name)
+	log.Println("Mkdiring", req.Name, "in", f.node.name)
 
 	if err := mkdir(realify(filepath.Join(f.node.Path(), req.Name)), req.Mode); err != nil {
 		return nil, errors.Errorf("could not create real dir %v", req.Name)
@@ -215,9 +215,7 @@ func (f *File) Mkdir(ctx context.Context, req *fuse.MkdirRequest) (fs.Node, erro
 
 func (f *File) Link(ctx context.Context, req *fuse.LinkRequest, old fs.Node) (fs.Node, error) {
 	oldnode := old.(*File).node
-	log.Println("old name:", oldnode.Path())
-	log.Println("file:", f.node.Path())
-	log.Println("req name:", req.NewName)
+	log.Println("Linking", f.node.Name())
 
 	if err := f.node.CreateChild(req.NewName); err != nil {
 		return nil, fuse.ENOENT
@@ -236,9 +234,7 @@ func (f *File) Link(ctx context.Context, req *fuse.LinkRequest, old fs.Node) (fs
 
 }
 func (f *File) Symlink(ctx context.Context, req *fuse.SymlinkRequest) (fs.Node, error) {
-	log.Println("NewName:", req.NewName)
-	log.Println("Path:", f.node.Path())
-	log.Println("target:", req.Target)
+	log.Println("Symlinkig", f.node.Name())
 
 	if err := os.Symlink(req.Target, realify(filepath.Join(f.node.Path(), req.NewName))); err != nil {
 		log.Println("symlinl", err)
@@ -264,31 +260,31 @@ func (f *File) Readlink(ctx context.Context, req *fuse.ReadlinkRequest) (string,
 }
 
 func (f *File) Open(ctx context.Context, req *fuse.OpenRequest, resp *fuse.OpenResponse) (fs.Handle, error) {
-	log.Println("Opening ", f.node.name)
+	log.Println("Opening", f.node.name)
 	return f, nil
 }
 
 // Fsync to be implemented
 func (f *File) Fsync(ctx context.Context, req *fuse.FsyncRequest) error {
-	log.Printf("in Fsync: %v", f.node.name)
+	log.Println("Fsyncing", f.node.name)
 	return nil
 }
 
 // Flush to be implemented
 func (f *File) Flush(ctx context.Context, req *fuse.FlushRequest) error {
-	log.Printf("in Flush: %v", f.node.name)
+	log.Println("Flushing", f.node.name)
 	return nil
 }
 
 // Release to be implemented
 func (f *File) Release(ctx context.Context, req *fuse.ReleaseRequest) error {
-	log.Printf("in Release: %v", f.node.name)
+	log.Println("Releasing", f.node.name)
 	return nil
 }
 
 // Setattr to be implemented
 func (f *File) Setattr(ctx context.Context, req *fuse.SetattrRequest, resp *fuse.SetattrResponse) error {
-	log.Printf("in Setattr: %v", f.node.name)
+	log.Println("Setattring", f.node.name)
 	if !req.Valid.Mode() {
 		return nil
 	}
