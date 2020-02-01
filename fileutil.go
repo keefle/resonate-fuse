@@ -62,6 +62,10 @@ func rm(name string) error {
 	return os.Remove(name)
 }
 
+func rename(oldn, newn string) error {
+	return os.Rename(oldn, newn)
+}
+
 func mkdir(name string, mode os.FileMode) error {
 	return os.Mkdir(name, mode)
 }

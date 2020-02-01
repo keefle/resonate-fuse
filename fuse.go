@@ -132,6 +132,7 @@ func (f *File) Write(ctx context.Context, req *fuse.WriteRequest, resp *fuse.Wri
 // ReadDirAll returns all children
 func (f *File) ReadDirAll(ctx context.Context) ([]fuse.Dirent, error) {
 	log.Println("ReadDirAlling", f.node.name)
+
 	return f.node.Dirents(), nil
 }
 
@@ -169,7 +170,7 @@ func (f *File) Rename(ctx context.Context, req *fuse.RenameRequest, newDir fs.No
 	log.Println("source:", oldn)
 	log.Println("target:", newn)
 
-	if err := os.Rename(oldn, newn); err != nil {
+	if err := rename(oldn, newn); err != nil {
 		err = errors.Wrapf(err, "could not rename file on disk (%v) from (%v) to %v", source, target, f.node.name)
 		log.Println(err)
 		return err

@@ -56,6 +56,14 @@ func (v *Volume) Serve() error {
 		}
 	}
 
+	// go func() {
+	// 	intermidiate := fmt.Sprintf("%v-intermidiate", v.fs.Origin())
+	// 	mkdir(intermidiate, os.ModeDir|0774)
+	// 	filepath.Walk(v.fs.Origin(), NewMigrator(v.fs.Origin(), intermidiate).migrateAll)
+	// 	time.Sleep(1 * time.Second)
+	// 	filepath.Walk(intermidiate, NewMigrator(intermidiate, v.fs.Location()).migrateAll)
+	// }()
+
 	if err := fs.Serve(v.conn, v.fs); err != nil {
 		return errors.Wrapf(err, "faced error when serving volume (%v)", v.fs.Location())
 	}
