@@ -66,10 +66,6 @@ func mkdir(name string, mode os.FileMode) error {
 	return os.Mkdir(name, mode)
 }
 
-func realify(path string) string {
-	return filepath.Join("real", path)
-}
-
 func readall(path string) ([]byte, error) {
 	return ioutil.ReadFile(path)
 }

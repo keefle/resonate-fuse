@@ -2,43 +2,34 @@ package main
 
 import (
 	"log"
+	"os"
+	"os/signal"
+	"syscall"
 
-	"bazil.org/fuse"
-	"bazil.org/fuse/fs"
 	rs "git.iyi.cz/mo/resonatefuse"
 )
 
 func main() {
-	mountpoint := "fake"
+	done := make(chan struct{})
+	volume := rs.NewVolume("fake")
+	closeHandler(volume, done)
 
-	c, err := fuse.Mount(
-		mountpoint,
-		fuse.FSName("helloworld"),
-		fuse.Subtype("hellofs"),
-		fuse.LocalVolume(),
-		fuse.VolumeName("Hello world!"),
-	)
-
-	if err != nil {
-		log.Fatal(err)
+	if err := volume.Serve(); err != nil {
+		log.Println(err)
 	}
-	defer c.Close()
-	fsy := rs.NewFS("fake")
 
-	err = fs.Serve(c, fsy)
-	defer func() {
-		if err := fuse.Unmount(mountpoint); err != nil {
+	<-done
+}
+
+func closeHandler(v *rs.Volume, done chan<- struct{}) {
+	c := make(chan os.Signal, 2)
+	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		<-c
+		if err := v.Stop(); err != nil {
 			log.Println(err)
 		}
+		done <- struct{}{}
+		os.Exit(0)
 	}()
-
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	// check if the mount process has an error to report
-	<-c.Ready
-	if err := c.MountError; err != nil {
-		log.Fatal(err)
-	}
 }

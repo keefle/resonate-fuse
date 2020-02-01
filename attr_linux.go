@@ -17,9 +17,9 @@ import (
 func (f *File) Attr(ctx context.Context, a *fuse.Attr) error {
 	log.Println("Attring", f.node.name)
 
-	info, err := os.Lstat(realify(f.node.Path()))
+	info, err := os.Lstat(f.fs.realify(f.node.Path()))
 	if err != nil {
-		err = errors.Wrapf(err, "could not retrieve file (%v) info", realify(f.node.Path()))
+		err = errors.Wrapf(err, "could not retrieve file (%v) info", f.fs.realify(f.node.Path()))
 		log.Println(err)
 		return fuse.ENOENT
 	}
