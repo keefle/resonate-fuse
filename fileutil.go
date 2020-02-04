@@ -50,7 +50,7 @@ func readAt(name string, data []byte, offset int64) (int, error) {
 	return n, nil
 }
 
-func touch(name string, mode os.FileMode) error {
+func Touch(name string, mode os.FileMode) error {
 	file, err := os.OpenFile(name, os.O_RDONLY|os.O_CREATE, mode)
 	if err != nil {
 		return err

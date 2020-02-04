@@ -1,17 +1,19 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"os/signal"
 	"syscall"
 
-	rs "git.iyi.cz/mo/resonatefuse"
+	"bazil.org/fuse"
+	rs "git.nightcrickets.space/keefleoflimon/resonatefuse"
 )
 
 func main() {
 	done := make(chan struct{})
-	volume := rs.NewVolume("fake")
+	volume := rs.NewVolume("fake", func(path string, req *fuse.CreateRequest) { fmt.Println("Hello", path) })
 	closeHandler(volume, done)
 
 	if err := volume.Serve(); err != nil {

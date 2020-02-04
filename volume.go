@@ -2,6 +2,7 @@ package resonatefuse
 
 import (
 	"io/ioutil"
+	"log"
 	"os"
 
 	"bazil.org/fuse"
@@ -12,11 +13,40 @@ import (
 type Volume struct {
 	fs   *FS
 	conn *fuse.Conn
+	serv *fs.Server
 }
 
-func NewVolume(name string) *Volume {
-	v := &Volume{fs: NewFS(name)}
+func (v *Volume) Server() *fs.Server {
+	return v.serv
+}
+
+func NewVolume(name string, ch CreateHook, wh WriteHook, rh RemoveHook, mh MkdirHook, rnh RenameHook) *Volume {
+	if ch == nil {
+		log.Fatal("createhook cannot be nil")
+	}
+
+	if wh == nil {
+		log.Fatal("writeHook cannot be nil")
+	}
+
+	if rh == nil {
+		log.Fatal("removeHook cannot be nil")
+	}
+
+	if mh == nil {
+		log.Fatal("mkdirHook cannot be nil")
+	}
+
+	if rnh == nil {
+		log.Fatal("renameHook cannot be nil")
+	}
+
+	v := &Volume{fs: NewFS(name, ch, wh, rh, mh, rnh)}
 	return v
+}
+
+func (v *Volume) Fuse() *FS {
+	return v.fs
 }
 
 func (v *Volume) mount() error {
@@ -44,6 +74,7 @@ func (v *Volume) mount() error {
 	}
 
 	v.conn = c
+	v.serv = fs.New(v.conn, nil)
 
 	return nil
 }
@@ -56,15 +87,7 @@ func (v *Volume) Serve() error {
 		}
 	}
 
-	// go func() {
-	// 	intermidiate := fmt.Sprintf("%v-intermidiate", v.fs.Origin())
-	// 	mkdir(intermidiate, os.ModeDir|0774)
-	// 	filepath.Walk(v.fs.Origin(), NewMigrator(v.fs.Origin(), intermidiate).migrateAll)
-	// 	time.Sleep(1 * time.Second)
-	// 	filepath.Walk(intermidiate, NewMigrator(intermidiate, v.fs.Location()).migrateAll)
-	// }()
-
-	if err := fs.Serve(v.conn, v.fs); err != nil {
+	if err := v.serv.Serve(v.fs); err != nil {
 		return errors.Wrapf(err, "faced error when serving volume (%v)", v.fs.Location())
 	}
 
@@ -91,6 +114,7 @@ func (v *Volume) Stop() error {
 	}
 
 	v.conn = nil
+	v.serv = nil
 
 	return nil
 }

@@ -15,11 +15,11 @@ import (
 
 // Attr returns some attributes about the file
 func (f *File) Attr(ctx context.Context, a *fuse.Attr) error {
-	log.Println("Attring", f.node.name)
+	log.Println("Attring", f.FFNode.Name())
 
-	info, err := os.Lstat(f.fs.realify(f.node.Path()))
+	info, err := os.Lstat(f.FFNode.fs.realify(f.FFNode.Path()))
 	if err != nil {
-		err = errors.Wrapf(err, "could not retrieve file (%v) info", f.fs.realify(f.node.Path()))
+		err = errors.Wrapf(err, "could not retrieve file (%v) info", f.FFNode.fs.realify(f.FFNode.Path()))
 		log.Println(err)
 		return fuse.ENOENT
 	}
@@ -31,7 +31,7 @@ func (f *File) Attr(ctx context.Context, a *fuse.Attr) error {
 		return fuse.ENOENT
 	}
 
-	a.Inode = f.node.ID()
+	a.Inode = stat.Ino
 	a.Nlink = uint32(stat.Nlink)
 	a.Uid = stat.Uid
 	a.Gid = stat.Gid

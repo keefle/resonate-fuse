@@ -4,13 +4,11 @@ import (
 	"path/filepath"
 
 	"bazil.org/fuse"
-	"bazil.org/fuse/fs"
 	"github.com/pkg/errors"
 )
 
 // FileTree is the building node of a filesystem
 type FileTree struct {
-	id       uint64
 	name     string
 	link     string
 	parent   *FileTree
@@ -23,11 +21,8 @@ func NewNode(name string, parent *FileTree) *FileTree {
 	ft := &FileTree{
 		name:     name,
 		parent:   parent,
-		id:       0,
 		children: nil,
 	}
-
-	ft.id = fs.GenerateDynamicInode(ft.parentID(), name)
 
 	return ft
 }
@@ -49,20 +44,6 @@ func NewDirectory(name string, parent *FileTree) *FileTree {
 	return ft
 }
 
-// parentID gets parent Inode
-func (ft *FileTree) parentID() uint64 {
-	if ft.parent == nil {
-		return 0
-	}
-
-	return ft.parent.ID()
-}
-
-// ID gets file's Inode
-func (ft *FileTree) ID() uint64 {
-	return ft.id
-}
-
 func (ft *FileTree) Link() string {
 	return ft.link
 }
@@ -73,16 +54,16 @@ func (ft *FileTree) Name() string {
 }
 
 // Type returns the type of filetree (folder, file, symlink, etc)
-func (ft *FileTree) Type() fuse.DirentType {
+func (ft *FileTree) Type() NodeType {
 	if ft.link != "" {
-		return fuse.DT_Link
+		return LINK
 	}
 
 	if ft.children == nil {
-		return fuse.DT_File
+		return FILE
 	}
 
-	return fuse.DT_Dir
+	return DIR
 }
 
 // CreateChild adds a new child to the filetree
@@ -102,7 +83,7 @@ func (ft *FileTree) CreateLinkChild(name string, link string) error {
 
 // AddChild adds an existing filetree as a child
 func (ft *FileTree) AddChild(name string, child *FileTree) error {
-	if ft.Type() == fuse.DT_File {
+	if ft.Type() == FILE {
 		return errors.New("cannot add child to leaf")
 	}
 
@@ -172,7 +153,7 @@ func (ft *FileTree) Children() []*FileTree {
 
 // Child returns a specific child from chosen directory
 func (ft *FileTree) Child(name string) *FileTree {
-	if ft.Type() == fuse.DT_File {
+	if ft.Type() == FILE {
 		return nil
 	}
 
@@ -192,24 +173,12 @@ func (ft *FileTree) Dirents() []fuse.Dirent {
 
 	for _, child := range ft.children {
 		childrenList = append(childrenList, fuse.Dirent{
-			Inode: child.ID(),
-			Name:  child.Name(),
-			Type:  child.Type(),
+			Name: child.Name(),
+			Type: child.Type().ToFUSE(),
 		})
 	}
 
 	return childrenList
-}
-
-// parentID gets parent Inode
-func (ft *FileTree) Root() *FileTree {
-	current := ft
-
-	for current.parent != nil {
-		current = current.parent
-	}
-
-	return current
 }
 
 // Path returns the path of the filetree with respect to the root parent
