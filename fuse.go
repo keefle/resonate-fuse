@@ -10,13 +10,11 @@ import (
 	"bazil.org/fuse/fs"
 )
 
-// type CreateHook func(on *File, path string, req *fuse.CreateRequest)
-// type WriteHook func(path string, data []byte, offset int64)
-
 // FS implements the hello world file system.
 type FS struct {
-	root        *File
-	origin      string
+	root   *File
+	origin string
+
 	createHook  CreateHook
 	writeHook   WriteHook
 	removeHook  RemoveHook
@@ -40,9 +38,14 @@ func (fs *FS) Location() string {
 	return fmt.Sprintf("%v-resonate", fs.origin)
 }
 
-func NewFS(name string, ch CreateHook, wh WriteHook, rh RemoveHook, mh MkdirHook, rnh RenameHook) *FS {
-	fs := &FS{origin: name, createHook: ch, writeHook: wh, removeHook: rh, mkdirHook: mh, renameHook: rnh}
+func NewFS(name string, opts ...Option) *FS {
+	fs := &FS{origin: name}
 	fs.root = NewFile(NewFFile(NewDirectory(fs.Location(), nil), fs))
+
+	for _, opt := range opts {
+		opt(fs)
+	}
+
 	return fs
 }
 

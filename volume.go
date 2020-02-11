@@ -2,7 +2,6 @@ package resonatefuse
 
 import (
 	"io/ioutil"
-	"log"
 	"os"
 
 	"bazil.org/fuse"
@@ -20,28 +19,8 @@ func (v *Volume) Server() *fs.Server {
 	return v.serv
 }
 
-func NewVolume(name string, ch CreateHook, wh WriteHook, rh RemoveHook, mh MkdirHook, rnh RenameHook) *Volume {
-	if ch == nil {
-		log.Fatal("createhook cannot be nil")
-	}
-
-	if wh == nil {
-		log.Fatal("writeHook cannot be nil")
-	}
-
-	if rh == nil {
-		log.Fatal("removeHook cannot be nil")
-	}
-
-	if mh == nil {
-		log.Fatal("mkdirHook cannot be nil")
-	}
-
-	if rnh == nil {
-		log.Fatal("renameHook cannot be nil")
-	}
-
-	v := &Volume{fs: NewFS(name, ch, wh, rh, mh, rnh)}
+func NewVolume(name string, opts ...Option) *Volume {
+	v := &Volume{fs: NewFS(name, opts...)}
 	return v
 }
 
