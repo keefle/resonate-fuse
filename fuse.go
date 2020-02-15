@@ -39,6 +39,10 @@ func (fs *FS) Location() string {
 }
 
 func NewFS(name string, opts ...Option) *FS {
+	if len(opts) != 8 {
+		log.Fatal("could not create filesystem")
+	}
+
 	fs := &FS{origin: name}
 	fs.root = NewFile(NewFFile(NewDirectory(fs.Location(), nil), fs))
 
@@ -91,7 +95,11 @@ func (f *File) Lookup(ctx context.Context, name string) (fs.Node, error) {
 func (f *File) Create(ctx context.Context, req *fuse.CreateRequest, resp *fuse.CreateResponse) (fs.Node, fs.Handle, error) {
 	log.Println("Creating", req.Name, "in", f.FFNode.Name())
 	// First create the file and then add it to the tree (order is important)
-	f.FFNode.fs.createHook(&CreateRequest{f.FFNode.Path(), req.Name, req.Mode})
+	err := f.FFNode.fs.createHook(&CreateRequest{f.FFNode.Path(), req.Name, req.Mode})
+	if err != nil {
+		return nil, nil, fuse.EIO
+	}
+
 	child, err := f.FFNode.Create(req.Name, req.Mode)
 	if err != nil {
 		return nil, nil, fuse.EIO
@@ -105,7 +113,11 @@ func (f *File) Remove(ctx context.Context, req *fuse.RemoveRequest) error {
 	log.Println("Removing", req.Name, "in", f.FFNode.Name())
 	// First remove the file from the tree then remove it from disk (order is important)
 
-	f.FFNode.fs.removeHook(&RemoveRequest{f.FFNode.Path(), req.Name})
+	err := f.FFNode.fs.removeHook(&RemoveRequest{f.FFNode.Path(), req.Name})
+	if err != nil {
+		return fuse.EIO
+	}
+
 	if err := f.FFNode.Remove(req.Name); err != nil {
 		return fuse.ENOENT
 	}
@@ -116,7 +128,11 @@ func (f *File) Remove(ctx context.Context, req *fuse.RemoveRequest) error {
 func (f *File) Write(ctx context.Context, req *fuse.WriteRequest, resp *fuse.WriteResponse) error {
 	log.Println("Writing", f.FFNode.Name())
 
-	f.FFNode.fs.writeHook(&WriteRequest{Path: f.FFNode.Path(), Data: req.Data, Offset: req.Offset})
+	err := f.FFNode.fs.writeHook(&WriteRequest{Path: f.FFNode.Path(), Data: req.Data, Offset: req.Offset})
+	if err != nil {
+		return fuse.EIO
+	}
+
 	n, err := f.FFNode.Write(req.Data, req.Offset)
 
 	if err != nil {
@@ -154,8 +170,11 @@ func (f *File) Read(ctx context.Context, req *fuse.ReadRequest, resp *fuse.ReadR
 func (f *File) Rename(ctx context.Context, req *fuse.RenameRequest, newDir fs.Node) error {
 	log.Println("Renaming source", req.OldName, "in", f.FFNode.Path(), "to", req.NewName)
 
-	f.FFNode.fs.renameHook(&RenameRequest{f.FFNode.Path(), req.OldName, req.NewName, newDir.(*File).FFNode.Path()})
-	err := f.FFNode.Rename(req.OldName, req.NewName, newDir.(*File).FFNode)
+	err := f.FFNode.fs.renameHook(&RenameRequest{f.FFNode.Path(), req.OldName, req.NewName, newDir.(*File).FFNode.Path()})
+	if err != nil {
+		return fuse.EIO
+	}
+	err = f.FFNode.Rename(req.OldName, req.NewName, newDir.(*File).FFNode)
 	if err != nil {
 		return fuse.EIO
 	}
@@ -166,7 +185,11 @@ func (f *File) Rename(ctx context.Context, req *fuse.RenameRequest, newDir fs.No
 // Mkdir creats a directory
 func (f *File) Mkdir(ctx context.Context, req *fuse.MkdirRequest) (fs.Node, error) {
 	log.Println("Mkdiring", req.Name, "in", f.FFNode.Name())
-	f.FFNode.fs.mkdirHook(&MkdirRequest{f.FFNode.Path(), req.Name, req.Mode})
+
+	err := f.FFNode.fs.mkdirHook(&MkdirRequest{f.FFNode.Path(), req.Name, req.Mode})
+	if err != nil {
+		return nil, fuse.EIO
+	}
 	dir, err := f.FFNode.Mkdir(req.Name, req.Mode)
 	if err != nil {
 		return nil, fuse.EIO
@@ -179,6 +202,11 @@ func (f *File) Link(ctx context.Context, req *fuse.LinkRequest, old fs.Node) (fs
 	oldnode := old.(*File)
 	log.Println("Linking", f.FFNode.Name())
 
+	err := f.FFNode.fs.linkHook(&LinkRequest{Path: f.FFNode.Path(), NewName: req.NewName, Old: oldnode.FFNode.Path()})
+	if err != nil {
+		return nil, fuse.EIO
+	}
+
 	link, err := f.FFNode.Link(req.NewName, oldnode.FFNode)
 	if err != nil {
 		return nil, fuse.EIO
@@ -189,12 +217,37 @@ func (f *File) Link(ctx context.Context, req *fuse.LinkRequest, old fs.Node) (fs
 }
 func (f *File) Symlink(ctx context.Context, req *fuse.SymlinkRequest) (fs.Node, error) {
 	log.Println("Symlinkig", f.FFNode.Name())
+
+	err := f.FFNode.fs.symlinkHook(&SymlinkRequest{Path: f.FFNode.Path(), Target: req.Target, NewName: req.NewName})
+	if err != nil {
+		return nil, fuse.EIO
+	}
+
 	link, err := f.FFNode.Symlink(req.Target, req.NewName)
 	if err != nil {
 		return nil, fuse.EIO
 	}
 
 	return NewFile(link), nil
+}
+
+// Setattr to be implemented
+func (f *File) Setattr(ctx context.Context, req *fuse.SetattrRequest, resp *fuse.SetattrResponse) error {
+	log.Println("Setattring", f.FFNode.Name())
+	if !req.Valid.Mode() {
+		return nil
+	}
+
+	err := f.FFNode.fs.setattrHook(&SetattrRequest{Path: f.FFNode.Path(), Mode: req.Mode, Atime: req.Atime, Mtime: req.Mtime})
+	if err != nil {
+		return fuse.EIO
+	}
+
+	if err := f.FFNode.Setattr(req.Mode, req.Atime, req.Mtime); err != nil {
+		return fuse.EPERM
+	}
+
+	return nil
 }
 
 func (f *File) Readlink(ctx context.Context, req *fuse.ReadlinkRequest) (string, error) {
@@ -222,20 +275,6 @@ func (f *File) Flush(ctx context.Context, req *fuse.FlushRequest) error {
 // Release to be implemented
 func (f *File) Release(ctx context.Context, req *fuse.ReleaseRequest) error {
 	log.Println("Releasing", f.FFNode.Name())
-	return nil
-}
-
-// Setattr to be implemented
-func (f *File) Setattr(ctx context.Context, req *fuse.SetattrRequest, resp *fuse.SetattrResponse) error {
-	log.Println("Setattring", f.FFNode.Name())
-	if !req.Valid.Mode() {
-		return nil
-	}
-
-	if err := f.FFNode.Setattr(req.Mode, req.Atime, req.Mtime); err != nil {
-		return fuse.EPERM
-	}
-
 	return nil
 }
 

@@ -64,8 +64,6 @@ func (f *FFile) Lookup(name string) (*FFile, error) {
 // Create creats a new file on disk and filetree
 func (f *FFile) Create(name string, mode os.FileMode) (*FFile, error) {
 	log.Println("Creating", name, "in", f.node.name)
-	// First create the file and then add it to the tree (order is important)
-	// f.fs.createHook(f.node.Path(), req)
 
 	if err := Touch(f.fs.realify(filepath.Join(f.node.Path(), name)), mode); err != nil {
 		return nil, errors.Wrapf(err, "could not add file %v to disk", name)
