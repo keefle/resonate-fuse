@@ -1,4 +1,4 @@
-module resonatefuse
+module git.nightcrickets.space/keefleoflimon/resonatefuse
 
 go 1.13
 
