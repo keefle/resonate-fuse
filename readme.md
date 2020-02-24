@@ -5,7 +5,7 @@ A thin filesystem layer that allowes pre/post/ readwrite hooks
 ## Installing the library
 
 ```bash
-go get -u git.iyi.cz/mo/resonatefuse
+go get -uv git.nightcrickets.space/keefleoflimon/resonatefuse
 ```
 
 
