@@ -237,12 +237,7 @@ func (f *FFile) Setattr(mode os.FileMode, atime, mtime time.Time) error {
 	}
 
 	// NOTE: Changing owner not supported yet
-	// TODO: Invistigate previlage escliation
-	// if err := os.Chown(f.fs.realify(f.node.Path()), int(req.Uid), int(req.Gid)); err != nil {
-	//  err = return errors.Wrapf(err, "could not setattr chown file to new id (%v) gid (%v)", req.Uid, req.Gid)
-	//  log.Println(err)
-	// 	return err
-	// }
+	// TODO: Invistigate previlage escliation to apply chown
 
 	return nil
 }
