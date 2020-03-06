@@ -9,6 +9,7 @@ type HookType uint16
 
 const (
 	CreateType HookType = iota + 1
+	WriteType
 	RemoveType
 	RenameType
 	MkdirType
@@ -31,10 +32,4 @@ type GeneralRequest struct {
 	Old     string
 	Path    string
 	Target  string
-}
-
-func GeneralOption(operation HookType, h GeneralHook) Option {
-	return func(rfs *FS) {
-		rfs.hooks[operation] = h
-	}
 }
