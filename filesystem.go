@@ -35,6 +35,10 @@ func (f *FFile) Child(name string) *FFile {
 	return NewFFile(child, f.fs)
 }
 
+func (f *FFile) Type() NodeType {
+	return f.node.Type()
+}
+
 func (f *FFile) Name() string {
 	return f.node.Name()
 }
@@ -52,20 +56,20 @@ func (f *FFile) ReadDirAll() ([]fuse.Dirent, error) {
 // Lookup returns info about child
 func (f *FFile) Lookup(name string) (*FFile, error) {
 	log.Println("Looking for", name, "in", f.node.name)
-	child := f.node.Child(name)
+	child := f.Child(name)
 	if child == nil {
 		log.Println("lookup faild")
 		return nil, errors.Errorf("could not find child file (%v) during lookup", name)
 	}
 
-	return NewFFile(child, f.fs), nil
+	return child, nil
 }
 
 // Create creats a new file on disk and filetree
 func (f *FFile) Create(name string, mode os.FileMode) (*FFile, error) {
 	log.Println("Creating", name, "in", f.node.name)
 
-	if err := Touch(f.fs.realify(filepath.Join(f.node.Path(), name)), mode); err != nil {
+	if err := Touch(f.fs.realify(filepath.Join(f.Path(), name)), mode); err != nil {
 		return nil, errors.Wrapf(err, "could not add file %v to disk", name)
 	}
 
@@ -73,7 +77,7 @@ func (f *FFile) Create(name string, mode os.FileMode) (*FFile, error) {
 		return nil, errors.Wrapf(err, "could not add file %v to filetree", name)
 	}
 
-	return NewFFile(f.node.Child(name), f.fs), nil
+	return f.Child(name), nil
 }
 
 // Remove removes file from disk and filetree
@@ -81,12 +85,12 @@ func (f *FFile) Remove(name string) error {
 	log.Println("Removing", name, "in", f.node.name)
 	// First remove the file from the tree then remove it from disk (order is important)
 
-	child := f.node.Child(name)
+	child := f.Child(name)
 	if child == nil {
 		return errors.Errorf("could not remove file (%v) as it does was not found", name)
 	}
 
-	if child.Type() == DIR && len(child.children) > 0 {
+	if child.Type() == DIR && len(child.node.children) > 0 {
 		return errors.Errorf("could not remove directory (%v) as it is not empty", name)
 	}
 
@@ -94,7 +98,7 @@ func (f *FFile) Remove(name string) error {
 		return errors.Wrapf(err, "could not remove file %v from filetree", name)
 	}
 
-	if err := rm(f.fs.realify(filepath.Join(f.node.Path(), name))); err != nil {
+	if err := rm(f.fs.realify(filepath.Join(f.Path(), name))); err != nil {
 		return errors.Wrapf(err, "could not remove file %v from disk", name)
 	}
 
@@ -104,7 +108,7 @@ func (f *FFile) Remove(name string) error {
 func (f *FFile) Write(data []byte, offset int64) (int, error) {
 	log.Println("Writing", f.node.name)
 
-	n, err := writeAt(f.fs.realify(f.node.Path()), data, offset)
+	n, err := writeAt(f.fs.realify(f.Path()), data, offset)
 	if err != nil {
 		log.Println(err)
 		return n, errors.Wrapf(err, "could not write data to file (%v)", f.node.name)
@@ -116,12 +120,12 @@ func (f *FFile) Write(data []byte, offset int64) (int, error) {
 // ReadAll returns all bytes in file
 func (f *FFile) ReadAll() ([]byte, error) {
 	log.Println("ReadAlling", f.node.name)
-	return readall(f.fs.realify(f.node.Path()))
+	return readall(f.fs.realify(f.Path()))
 }
 
 func (f *FFile) Read(data []byte, offset int64) error {
 	log.Println("Reading", f.node.name)
-	_, err := readAt(f.fs.realify(f.node.Path()), data, offset)
+	_, err := readAt(f.fs.realify(f.Path()), data, offset)
 	if err != nil {
 		log.Println(err)
 		return errors.Wrapf(err, "could not read data from file (%v)", f.node.name)
@@ -135,15 +139,15 @@ func (f *FFile) Rename(oldName, newName string, newDir *FFile) error {
 	newParent := newDir.node
 	source := oldName
 	target := newName
-	log.Println("Renaming source", source, "in", f.node.Path(), "to", target, " in ", newParent.Path())
+	log.Println("Renaming source", source, "in", f.Path(), "to", target, " in ", newParent.Path())
 
 	if err := f.node.Rename(source, target, newParent); err != nil {
 
 		log.Println(err)
-		return errors.Wrapf(err, "could not rename file (%v) from (%v) to (%v)", source, f.node.Path(), newParent.Path())
+		return errors.Wrapf(err, "could not rename file (%v) from (%v) to (%v)", source, f.Path(), newParent.Path())
 	}
 
-	oldn := f.fs.realify(filepath.Join(f.node.Path(), source))
+	oldn := f.fs.realify(filepath.Join(f.Path(), source))
 	newn := f.fs.realify(filepath.Join(newParent.Path(), target))
 	log.Println("source:", oldn)
 	log.Println("target:", newn)
@@ -160,7 +164,7 @@ func (f *FFile) Rename(oldName, newName string, newDir *FFile) error {
 func (f *FFile) Mkdir(name string, mode os.FileMode) (*FFile, error) {
 	log.Println("Mkdiring", name, "in", f.node.name)
 
-	if err := mkdir(f.fs.realify(filepath.Join(f.node.Path(), name)), mode); err != nil {
+	if err := mkdir(f.fs.realify(filepath.Join(f.Path(), name)), mode); err != nil {
 		return nil, errors.Errorf("could not create real dir %v", name)
 	}
 
@@ -168,9 +172,9 @@ func (f *FFile) Mkdir(name string, mode os.FileMode) (*FFile, error) {
 		return nil, errors.Errorf("could not create dir %v to filetree", name)
 	}
 
-	child := f.node.Child(name)
+	child := f.Child(name)
 
-	return NewFFile(child, f.fs), nil
+	return child, nil
 }
 
 func (f *FFile) Link(newName string, old *FFile) (*FFile, error) {
@@ -181,23 +185,23 @@ func (f *FFile) Link(newName string, old *FFile) (*FFile, error) {
 		return nil, errors.Wrapf(err, "could not create link to file (%v)", newName)
 	}
 
-	child := f.node.Child(newName)
+	child := f.Child(newName)
 	if child == nil {
 		return nil, errors.Errorf("could not find created link in file (%v)", newName)
 	}
 
-	if err := os.Link(f.fs.realify(oldnode.Path()), f.fs.realify(filepath.Join(f.node.Path(), newName))); err != nil {
+	if err := os.Link(f.fs.realify(oldnode.Path()), f.fs.realify(filepath.Join(f.Path(), newName))); err != nil {
 		return nil, errors.Wrapf(err, "could not link file (%v) on disk", newName)
 	}
 
-	return NewFFile(child, f.fs), nil
+	return child, nil
 
 }
 
 func (f *FFile) Symlink(target, newName string) (*FFile, error) {
 	log.Println("Symlinkig", f.node.Name())
 
-	if err := os.Symlink(target, f.fs.realify(filepath.Join(f.node.Path(), newName))); err != nil {
+	if err := os.Symlink(target, f.fs.realify(filepath.Join(f.Path(), newName))); err != nil {
 		log.Println("symlink", err)
 		return nil, errors.Wrapf(err, "could not symlink file (%v) with target (%v) on disk", newName, target)
 	}
@@ -207,9 +211,9 @@ func (f *FFile) Symlink(target, newName string) (*FFile, error) {
 		return nil, errors.Wrapf(err, "could not symlink file (%v) with target (%v) on filetree", newName, target)
 	}
 
-	child := f.node.Child(newName)
+	child := f.Child(newName)
 
-	return NewFFile(child, f.fs), nil
+	return child, nil
 }
 
 func (f *FFile) Readlink() (string, error) {
@@ -224,13 +228,13 @@ func (f *FFile) Readlink() (string, error) {
 func (f *FFile) Setattr(mode os.FileMode, atime, mtime time.Time) error {
 	log.Println("Setattring", f.node.name)
 
-	if err := os.Chmod(f.fs.realify(f.node.Path()), mode); err != nil {
+	if err := os.Chmod(f.fs.realify(f.Path()), mode); err != nil {
 		err = errors.Wrapf(err, "could not setattr chmod file")
 		log.Println(err)
 		return err
 	}
 
-	if err := os.Chtimes(f.fs.realify(f.node.Path()), atime, mtime); err != nil {
+	if err := os.Chtimes(f.fs.realify(f.Path()), atime, mtime); err != nil {
 		err = errors.Wrapf(err, "could not setattr chtimes file")
 		log.Println(err)
 		return err
