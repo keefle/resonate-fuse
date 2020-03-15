@@ -80,6 +80,9 @@ func (f *File) Child(name string) *File {
 
 // Lookup returns info about child
 func (f *File) Lookup(ctx context.Context, name string) (fs.Node, error) {
+	f.FFNode.fs.mu.Lock()
+	defer f.FFNode.fs.mu.Unlock()
+
 	log.Println("Looking for", name, "in", f.FFNode.Name())
 	child, err := f.FFNode.Lookup(name)
 	if err != nil {
@@ -157,16 +160,25 @@ func (f *File) Write(ctx context.Context, req *fuse.WriteRequest, resp *fuse.Wri
 
 // ReadDirAll returns all children
 func (f *File) ReadDirAll(ctx context.Context) ([]fuse.Dirent, error) {
+	f.FFNode.fs.mu.Lock()
+	defer f.FFNode.fs.mu.Unlock()
+
 	log.Println("ReadDirAlling", f.FFNode.Name())
 	return f.FFNode.ReadDirAll()
 }
 
 // ReadAll returns all bytes in file
 func (f *File) ReadAll(ctx context.Context) ([]byte, error) {
+	f.FFNode.fs.mu.Lock()
+	defer f.FFNode.fs.mu.Unlock()
+
 	log.Println("ReadAlling", f.FFNode.Name())
 	return f.FFNode.ReadAll()
 }
 func (f *File) Read(ctx context.Context, req *fuse.ReadRequest, resp *fuse.ReadResponse) error {
+	f.FFNode.fs.mu.Lock()
+	defer f.FFNode.fs.mu.Unlock()
+
 	log.Println("Reading", f.FFNode.Name())
 	if err := f.FFNode.Read(resp.Data, req.Offset); err != nil {
 		log.Println(err)
@@ -278,10 +290,14 @@ func (f *File) Setattr(ctx context.Context, req *fuse.SetattrRequest, resp *fuse
 }
 
 func (f *File) Readlink(ctx context.Context, req *fuse.ReadlinkRequest) (string, error) {
+	f.FFNode.fs.mu.Lock()
+	defer f.FFNode.fs.mu.Unlock()
 	return f.FFNode.Readlink()
 }
 
 func (f *File) Open(ctx context.Context, req *fuse.OpenRequest, resp *fuse.OpenResponse) (fs.Handle, error) {
+	f.FFNode.fs.mu.Lock()
+	defer f.FFNode.fs.mu.Unlock()
 	log.Println("Opening", f.FFNode.Name())
 	resp.Flags |= fuse.OpenDirectIO
 	return f, nil
@@ -289,18 +305,24 @@ func (f *File) Open(ctx context.Context, req *fuse.OpenRequest, resp *fuse.OpenR
 
 // Fsync to be implemented
 func (f *File) Fsync(ctx context.Context, req *fuse.FsyncRequest) error {
+	f.FFNode.fs.mu.Lock()
+	defer f.FFNode.fs.mu.Unlock()
 	log.Println("Fsyncing", f.FFNode.Name())
 	return nil
 }
 
 // Flush to be implemented
 func (f *File) Flush(ctx context.Context, req *fuse.FlushRequest) error {
+	f.FFNode.fs.mu.Lock()
+	defer f.FFNode.fs.mu.Unlock()
 	log.Println("Flushing", f.FFNode.Name())
 	return nil
 }
 
 // Release to be implemented
 func (f *File) Release(ctx context.Context, req *fuse.ReleaseRequest) error {
+	f.FFNode.fs.mu.Lock()
+	defer f.FFNode.fs.mu.Unlock()
 	log.Println("Releasing", f.FFNode.Name())
 	return nil
 }

@@ -15,6 +15,9 @@ import (
 
 // Attr returns some attributes about the file
 func (f *File) Attr(ctx context.Context, a *fuse.Attr) error {
+	f.FFNode.fs.mu.Lock()
+	defer f.FFNode.fs.mu.Unlock()
+
 	log.Println("Attring", f.FFNode.Name())
 
 	info, err := os.Lstat(f.FFNode.fs.realify(f.FFNode.Path()))
